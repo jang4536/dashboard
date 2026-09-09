@@ -15,7 +15,8 @@
         .dashboard { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
         .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); transition: transform 0.2s; }
         .card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
-        .card h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 20px; font-size: 20px; }
+        .card h3 { margin-top: 0; color: #2c3e50; border-bottom: none; padding-bottom: 0; margin-bottom: 5px; font-size: 20px; }
+        .sub-text { font-size: 13px; color: #7f8c8d; border-bottom: 2px solid #f0f0f0; padding-bottom: 12px; margin-bottom: 15px; }
         .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; color: #555; font-size: 16px; }
         .icon { font-size: 1.2em; margin-right: 8px; vertical-align: middle; }
         #loading { font-size: 20px; color: #2c3e50; font-weight: bold; text-align: center; width: 100%; margin-top: 50px; }
@@ -91,9 +92,8 @@
                 card.className = 'card';
                 card.innerHTML = `
                     <h3>${room.name}</h3>
-                    <div class="info-row"><span><span class="icon">👥</span>수용 인원</span> <span><b>${room.capacity}</b>명</span></div>
-                    <div class="info-row"><span><span class="icon">💻</span>컴퓨터</span> <span><b>${room.pc}</b>대</span></div>
-                    <div class="info-row"><span><span class="icon">🖥️</span>모니터</span> <span><b>${room.monitor}</b>대</span></div>
+                    ${room.desc ? `<div class="sub-text">${room.desc}</div>` : '<div class="sub-text" style="visibility:hidden;">-</div>'}
+                    <div class="info-row"><span><span class="icon">🏷️</span>관리 주체</span> <span><b>${room.manager}</b></span></div>
                 `;
                 dashboard.appendChild(card);
             });
@@ -105,7 +105,7 @@
             const selectedFloor = floorFilter.value;
 
             const filtered = classrooms.filter(room => {
-                const matchKeyword = room.name.toLowerCase().includes(keyword);
+                const matchKeyword = room.name.toLowerCase().includes(keyword) || room.desc.toLowerCase().includes(keyword);
                 const matchBuilding = selectedBuilding === 'all' || room.building === selectedBuilding;
                 const matchFloor = selectedFloor === 'all' || room.floor === selectedFloor;
                 return matchKeyword && matchBuilding && matchFloor;
@@ -140,9 +140,8 @@
                         building: row['건물'],
                         floor: row['층수'],
                         name: row['강의실명'],
-                        capacity: parseInt(row['수용인원']) || 0,
-                        pc: parseInt(row['컴퓨터']) || 0,
-                        monitor: parseInt(row['모니터']) || 0
+                        manager: row['관리주체'] || '미지정',
+                        desc: row['설명'] || row['비고'] || ''
                     }));
 
                 loadingText.style.display = 'none'; 
