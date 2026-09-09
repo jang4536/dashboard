@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>연성대학교 강의실 통합 관리 대시보드</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; }
+        .title { font-size: 28px; font-weight: bold; color: #2c3e50; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .filter-select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; background-color: white; cursor: pointer; min-width: 130px; }
+        .filter-select:disabled { background-color: #e9ecef; cursor: not-allowed; color: #6c757d; }
+        .search-input { padding: 12px; width: 250px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+        .card h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 20px; font-size: 20px; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; color: #555; font-size: 16px; }
+        .icon { font-size: 1.2em; margin-right: 8px; vertical-align: middle; }
+        #loading { font-size: 20px; color: #2c3e50; font-weight: bold; text-align: center; width: 100%; margin-top: 50px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">🏫 연성대학교 강의실 통합 관리 대시보드</div>
+        <div class="controls">
+            <select id="buildingFilter" class="filter-select"><option value="all">전체 건물</option></select>
+            <select id="floorFilter" class="filter-select" disabled><option value="all">전체 층수</option></select>
+            <input type="text" id="searchInput" class="search-input" placeholder="강의실 검색 (예: 501)">
+        </div>
+    </div>
+    <div id="loading">데이터를 불러오는 중입니다...⏳</div>
+    <div class="dashboard" id="dashboard"></div>
+
+    <script>
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRF2HGuK8tUP2kmgx6zevbLSNY-NpTJxJfVQqiq2qh1n90-oyQwdgFxrQgPYshV1-0ccMQJprrOFfez/pub?gid=0&single=true&output=csv";
+
+        const buildingData = {
+            "공학1관": ["1층", "2층", "3층", "4층", "5층"],
+            "공학2관": ["B1층", "1층", "2층", "3층", "4층", "5층"],
+            "도의관": ["1층", "2층", "3층", "4층", "5층"],
+            "식품과학관": ["1층", "2층", "3층", "4층", "5층", "6층"],
+            "창조관": ["B1층", "1층", "2층", "3층", "4층", "5층"],
+            "문화1관": ["B1층", "1층", "2층", "3층", "4층", "5층", "6층"],
+            "문화2관": ["B1층", "1층", "2층", "3층", "4층", "5층", "6층"],
+            "대학본관": ["1층", "2층", "3층", "4층", "5층"],
+            "창의교육센터": ["1층", "2층", "3층", "4층"],
+            "연곡문화센터": ["B3층", "B2층", "B1층", "1층", "2층", "3층", "4층", "5층", "6층", "7층", "8층", "9층", "10층", "11층"],
+            "자연과학관": ["1층", "2층", "3층", "4층", "옥상"],
+            "학생복지센터": ["B2층", "B1층"],
+            "학술정보원": ["B1층", "1층", "2층", "3층", "4층", "5층", "6층"]
+        };
+
+        let classrooms = []; 
+        const dashboard = document.getElementById('dashboard');
+        const searchInput = document.getElementById('searchInput');
+        const buildingFilter = document.getElementById('buildingFilter');
+        const floorFilter = document.getElementById('floorFilter');
+        const loadingText = document.getElementById('loading');
+
+        Object.keys(buildingData).forEach(b => {
+            const option = document.createElement('option');
+            option.value = b; option.textContent = b;
+            buildingFilter.appendChild(option);
+        });
+
+        function updateFloorFilter() {
+            const selectedBuilding = buildingFilter.value;
+            floorFilter.innerHTML = '<option value="all">전체 층수</option>'; 
+            if (selectedBuilding === 'all') {
+                floorFilter.disabled = true;
+            } else {
+                floorFilter.disabled = false;
+                buildingData[selectedBuilding].forEach(f => {
+                    const option = document.createElement('option');
+                    option.value = f; option.textContent = f;
+                    floorFilter.appendChild(option);
+                });
+            }
+        }
+
+        function renderCards(data) {
+            dashboard.innerHTML = '';
+            if (data.length === 0) {
+                dashboard.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #777; padding: 20px;">조건에 맞는 강의실이 없습니다.</div>';
+                return;
+            }
+            data.forEach(room => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${room.name}</h3>
+                    <div class="info-row"><span><span class="icon">👥</span>수용 인원</span> <span><b>${room.capacity}</b>명</span></div>
+                    <div class="info-row"><span><span class="icon">💻</span>컴퓨터</span> <span><b>${room.pc}</b>대</span></div>
+                    <div class="info-row"><span><span class="icon">🖥️</span>모니터</span> <span><b>${room.monitor}</b>대</span></div>
+                `;
+                dashboard.appendChild(card);
+            });
+        }
+
+        function filterClassrooms() {
+            const keyword = searchInput.value.toLowerCase();
+            const selectedBuilding = buildingFilter.value;
+            const selectedFloor = floorFilter.value;
+
+            const filtered = classrooms.filter(room => {
+                const matchKeyword = room.name.toLowerCase().includes(keyword);
+                const matchBuilding = selectedBuilding === 'all' || room.building === selectedBuilding;
+                const matchFloor = selectedFloor === 'all' || room.floor === selectedFloor;
+                return matchKeyword && matchBuilding && matchFloor;
+            });
+            renderCards(filtered);
+        }
+
+        searchInput.addEventListener('input', filterClassrooms);
+        buildingFilter.addEventListener('change', () => { updateFloorFilter(); filterClassrooms(); });
+        floorFilter.addEventListener('change', filterClassrooms);
+
+        function cleanKeys(obj) {
+            let newObj = {};
+            Object.keys(obj).forEach(key => {
+                let cleanKey = key.trim().replace(/\s/g, '');
+                newObj[cleanKey] = obj[key];
+            });
+            return newObj;
+        }
+
+        fetch(CSV_URL)
+            .then(response => {
+                if (!response.ok) throw new Error('네트워크 응답에 문제가 있습니다.');
+                return response.text();
+            })
+            .then(csvText => {
+                const results = Papa.parse(csvText, { header: true });
+                classrooms = results.data
+                    .map(row => cleanKeys(row))
+                    .filter(row => row['강의실명'] && row['강의실명'].trim() !== "")
+                    .map(row => ({
+                        building: row['건물'],
+                        floor: row['층수'],
+                        name: row['강의실명'],
+                        capacity: parseInt(row['수용인원']) || 0,
+                        pc: parseInt(row['컴퓨터']) || 0,
+                        monitor: parseInt(row['모니터']) || 0
+                    }));
+
+                loadingText.style.display = 'none'; 
+                updateFloorFilter();
+                renderCards(classrooms);
+            })
+            .catch(err => {
+                loadingText.textContent = "데이터를 불러오는 중 오류가 발생했습니다: " + err.message;
+            });
+    </script>
+</body>
+</html>
